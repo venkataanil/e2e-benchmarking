@@ -12,6 +12,8 @@ if [ "$KUBE_BURNER_VERSION" = "default" ]; then
     unset KUBE_BURNER_VERSION
 fi
 KUBE_BURNER_VERSION=${KUBE_BURNER_VERSION:-1.13.1}
+KUBE_BURNER_OCP_REPO=${KUBE_BURNER_OCP_REPO:-}
+KUBE_BURNER_OCP_REF=${KUBE_BURNER_OCP_REF:-}
 OS=$(uname -s)
 HARDWARE=$(uname -m)
 WORKLOAD=${WORKLOAD:?}
@@ -22,6 +24,22 @@ EXTRA_FLAGS=${EXTRA_FLAGS:-}
 UUID=${UUID:-$(uuidgen)}
 KUBE_DIR=${KUBE_DIR:-/tmp}
 ES_INDEX=${ES_INDEX:-ripsaw-kube-burner}
+
+install_binary(){
+  if [[ -n "${KUBE_BURNER_OCP_REPO}" ]]; then
+    if [[ -z "${KUBE_BURNER_OCP_REF}" ]]; then
+      echo "KUBE_BURNER_OCP_REF is required when KUBE_BURNER_OCP_REPO is set" >&2
+      exit 1
+    fi
+    local source_dir="${KUBE_DIR}/kube-burner-ocp-source"
+    rm -rf "${source_dir}"
+    git clone --depth 1 --branch "${KUBE_BURNER_OCP_REF}" "${KUBE_BURNER_OCP_REPO}" "${source_dir}"
+    make -C "${source_dir}" build
+    cp "$(find "${source_dir}/bin" -type f -name kube-burner-ocp -print -quit)" "${KUBE_DIR}/kube-burner-ocp"
+  else
+    download_binary
+  fi
+}
 
 download_binary(){
   if [[ -z ${KUBE_BURNER_URL} ]]; then
@@ -147,7 +165,7 @@ EOF
 
 }
 
-download_binary
+install_binary
 if [[ ${WORKLOAD} =~ "index" ]]; then
   cmd="${KUBE_DIR}/kube-burner-ocp index --uuid=${UUID} --start=$START_TIME --end=$((END_TIME+600)) --log-level ${LOG_LEVEL}"
   JOB_START=$(date -u -d "@$START_TIME" +"%Y-%m-%dT%H:%M:%SZ")
